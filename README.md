@@ -17,5 +17,5 @@ https://docs.imagekit.io/api-reference/upload-file-api/server-side-file-upload#e
 - local_database: true | false
 
 ### UML Diagram:
-- create by https://draw.io/ 
+- created at https://draw.io/ 
 - "Entity Relationship Diagram" and "Flow Chart" in "uml" folder
