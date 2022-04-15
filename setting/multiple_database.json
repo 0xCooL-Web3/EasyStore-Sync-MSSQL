@@ -1,0 +1,16 @@
+[
+    {
+        "server": "YOUR_SERVER_NAME",
+        "user": "YOUR_ADMIN_USER",
+        "password": "YOUR_ADMIN_PASSWORD",
+        "database": "YOUR_DATABASE",
+        "port": 1433,
+    
+        "parseJSON": true,
+        "options":{
+            "trustedConnection": true,
+            "enableArithAbort": true,
+            "encrypt": false
+        }
+    }
+]

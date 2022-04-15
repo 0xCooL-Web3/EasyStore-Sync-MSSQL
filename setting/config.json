@@ -1,0 +1,10 @@
+{
+	"imagekit": {
+		"publicKey" : "YOUR_PUBLIC_KEY",
+		"privateKey" : "YOUR_PRIVATE_KEY",
+		"urlEndpoint" : "YOUR_URL_PATH"
+	},
+
+	"local_database": false,
+	"mssql_server_port": 1433
+}
