@@ -1,4 +1,4 @@
-/*
+ /*
 	refer API: https://documenter.getpostman.com/view/8990390/TzRYc4mn#0bc37452-2fb7-4425-bbea-495508c7fef0
 	(3.0 → Product → [POST]Creates a new product)
 
@@ -22,12 +22,13 @@
 	[√] insert Buffer(binary) into MSSQL database
 	[√] change create query to .sql file
 	[√] draw flow chart
+ 	[√] after upload image and create, delete it (reduce usage amount)
+	
+	[] add variable "this.hash_list" store the list
+	[] change "SP_HashTable" to use "HashValue" to generate
 	
 			Future
-	[] after upload image and create, delete it (reduce usage amount)
 	[] set all await got catch error handle
-	[] change shop_domain into txt file
-	[] set trigger in query
 
 	----------------------------------------------------------------------------------------------------
 */
@@ -52,13 +53,23 @@ function Handle(config={}, sql=""){
     this.database = config.mssql[0].database;
     this.sql = sql;
 	
-	this.upload = (data, filename) => {
+	this.imageUpload = (data, filename) => {
 		return new Promise((resolve, reject)=>{
 			this.imagekit.upload({
 				file: data,
 				fileName: filename,
 				folder: this.database
 			}, (err, response)=>{
+				if(err) reject(err);
+				
+				resolve(response);
+			});
+		});
+	}
+
+	this.imageDelete = (id) => {
+		return new Promise((resolve, reject)=>{
+			this.imagekit.deleteFile(id, (err, response)=>{
 				if(err) reject(err);
 				
 				resolve(response);
@@ -186,7 +197,7 @@ function Handle(config={}, sql=""){
                 //	mssql recordset
 				let rs = result.recordset;
 				let properties = ["title", "description", "body_html", "weight", "height", "price", "cost_price", "inventory_quantity", "is_enabled"];
-				let images = ["image1", "image2", "image3"];
+				let images = ["image1", "image2", "image3", "image4"];
 				//	variants properties
 				let variants = ["weight", "height", "price", "cost_price", "inventory_quantity", "is_enabled"];
 
@@ -203,22 +214,33 @@ function Handle(config={}, sql=""){
 							obj.variants[0][property] = row[property];
 						else
 							obj[property] = row[property];
-					//	if exist image binary data, convert to base64 and generate url(using "ImageKit API")
+
+					/*	
+						[if exist image binary data]
+
+						- convert to base64
+						- generate url(using "ImageKit API"), push to obj.images
+						- push to arr_image_id "ImageKit ID" (after upload, delete require)
+					*/
+					let arr_image_id = [];
 					for(let image of images)
-						if(image!=null || image!=""){
+						// if(image!=null || image!=""){
+						if(row[image]!=null){
 							let filename = `${row['title'] || "Product"}.jpg`;
 							let base64 = row[image].toString("base64");
 
 							console.log(`Uploading "${row['title']}" to ImageKit(cloud)`);
 
-							let response = await this.upload(base64, filename);
+							let response = await this.imageUpload(base64, filename);
 							obj.images.push({"url": response.url});
+							arr_image_id.push(response.fileId);
 						}
-					
+					//	response(product information)
 					let response = await this.create(obj);
-					//	show response(all) | show product.variants
-					// console.log(response);
-					// console.log(response.product.variants);
+
+					//	after created product(EasyStore) delete the image on the "ImageKit", to reduce storage
+					for(let id of arr_image_id)
+						this.imageDelete(id);
 					
 					try{
 						//	put response data into database
