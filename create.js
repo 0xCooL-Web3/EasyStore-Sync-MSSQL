@@ -23,9 +23,7 @@
 	[√] change create query to .sql file
 	[√] draw flow chart
  	[√] after upload image and create, delete it (reduce usage amount)
-	
-	[] add variable "this.hash_list" store the list
-	[] change "SP_HashTable" to use "HashValue" to generate
+	[√] change "SP_HashTable" to use "HashValue" to generate hash code
 	
 			Future
 	[] set all await got catch error handle
@@ -34,7 +32,6 @@
 */
 const ImageKit = require("imagekit");
 const Conn = require("./class/conn");
-const mssql = require("mssql");
 const axios = require('axios');
 const fs = require('fs');
 
@@ -52,6 +49,7 @@ function Handle(config={}, sql=""){
 	this.db_config = config.mssql[0];
     this.database = config.mssql[0].database;
     this.sql = sql;
+
 	
 	this.imageUpload = (data, filename) => {
 		return new Promise((resolve, reject)=>{
@@ -139,53 +137,32 @@ function Handle(config={}, sql=""){
 		catch(err){
 			console.error(err);
 		}
+	}
 
-		/*
-			insert into "EasyStore_Hash"
-		*/
-		try{
-			//	return - [product_id], [id], [handle], [hash]
-			let query = `
-				exec SP_HashTable 'EasyStore_Stock', '[product_id], [id], [handle]', ''
-			`;
+	/*
+		from "EasyStore_Stock" insert into "EasyStore_Hash"
+	*/
+	this.hash = () => {
+		//	need convert data type to varchar
+		//	[name], [body_html], [weight], [height], [price], [cost], [inventory_quantity]
+		let sql = `
+			insert into EasyStore_Hash([product_id], [id], [hash])
 
-			let response = await this.conn.query(query);
-			let rs = response.recordset;
-			let hash = null;
-
-			//	get hash code (found current “[product_id], [id]” in the HashTable)
-			for(let row of rs)
-				if(row['product_id']==json.id && row['id']==json.variants[0].id){
-					hash = row['hash'];
-					break;
-				}
-			
-			if(hash!=null){
-				mssql.connect(this.db_config).then((pool) => {
-					let ps = new mssql.PreparedStatement(pool);
-
-					ps.input('hash_code', mssql.VarBinary, hash);
-					ps.prepare(`
-						insert into EasyStore_Hash([product_id], [id], [hash])
-						values(
-							${json.id}, ${json.variants[0].id}, @hash_code
-						)
-					`, (err)=>{
-						ps.execute({hash_code: hash}, (err, records)=>{
-							ps.unprepare((err)=>{
-								console.log(`Successful insert "${json.name}" hash code.`);
-							});
-						});
-					});
-				})
-				.catch(err=>console.error(err));
-			}
-			else
-				console.error(`Unable to generate hash code.`);
-		}
-		catch(err){
-			console.error(err);
-		}
+			select 
+				[product_id], [id], 
+				dbo.HashValue(
+					cast(isnull([name], '') as varchar) + 
+					cast(isnull([body_html], '') as varchar) + 
+					cast(isnull([weight], 0) as varchar) + cast(isnull([height], 0) as varchar) + 
+					cast(isnull([price], 0) as varchar) + cast(isnull([cost], 0) as varchar) + 
+					cast(isnull([inventory_quantity], 0) as varchar)
+				) as [hash]
+			from EasyStore_Stock
+		`;
+		
+		this.conn.query(sql)
+			.then(()=>console.log(`Successful from "EasyStore_Stock" insert data to "EasyStore_Hash"`))
+			.catch(err=>console.error(err));
 	}
 
     this.build = () => {
@@ -224,7 +201,6 @@ function Handle(config={}, sql=""){
 					*/
 					let arr_image_id = [];
 					for(let image of images)
-						// if(image!=null || image!=""){
 						if(row[image]!=null){
 							let filename = `${row['title'] || "Product"}.jpg`;
 							let base64 = row[image].toString("base64");
@@ -235,15 +211,14 @@ function Handle(config={}, sql=""){
 							obj.images.push({"url": response.url});
 							arr_image_id.push(response.fileId);
 						}
-					//	response(product information)
+					
 					let response = await this.create(obj);
-
 					//	after created product(EasyStore) delete the image on the "ImageKit", to reduce storage
 					for(let id of arr_image_id)
 						this.imageDelete(id);
 					
 					try{
-						//	put response data into database
+						//	put product data into database
 						this.insert(response.product);
 					}
 					catch(err){
@@ -252,6 +227,7 @@ function Handle(config={}, sql=""){
 					}
 				}
 
+				this.hash();
 				console.log(`Created all data.`);
             })
             .catch(err=>console.error(err));
